@@ -205,13 +205,20 @@ class RobotWaypointEnv(gym.Env):
 
         # Terrain
         texture_path = os.path.join(script_path, "terrain", "6ha.png")
-        print(f"Loading texture from: {texture_path}")
-        print(f"Texture exists: {os.path.exists(texture_path)}")
+        # Only print texture info once per environment instance
+        if not hasattr(self, '_texture_info_printed'):
+            print(f"Loading texture from: {texture_path}")
+            print(f"Texture exists: {os.path.exists(texture_path)}")
+            self._texture_info_printed = True
+            verbose_texture = True
+        else:
+            verbose_texture = False
         heightfield = tg.generate_procedural_heightfield(rows=100, cols=100, height_perturbation=0.015)
         self.terrain_id = tg.create_pybullet_terrain(heightfield,
                                                      mesh_scale=(3.3, 1.8, 10.0),
                                                      base_position=(0, 0, 0),
-                                                     texture_path=texture_path)
+                                                     texture_path=texture_path,
+                                                     verbose=verbose_texture)
 
         # Random start
         start_x = self._rng.uniform(-2, 2)
@@ -659,6 +666,19 @@ class RobotWaypointEnv(gym.Env):
     def _angle_diff(a, b):
         d = a - b
         return ((d + math.pi) % (2 * math.pi)) - math.pi
+
+    # ---------------- SB3 Compatibility ----------------
+    def get_wrapper_attr(self, name):
+        """Required for SubprocVecEnv compatibility"""
+        return getattr(self, name)
+    
+    def set_wrapper_attr(self, name, value):
+        """Required for SubprocVecEnv compatibility"""
+        setattr(self, name, value)
+
+    def get_attr(self, name):
+        """Required for SubprocVecEnv compatibility"""
+        return getattr(self, name)
 
 
 # Simple sanity test

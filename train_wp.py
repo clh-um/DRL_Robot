@@ -86,6 +86,24 @@ class StuckMonitorCallback(BaseCallback):
         return True
 
 
+class ProgressCallback(BaseCallback):
+    """
+    Custom progress callback that prints clean progress updates.
+    """
+    def __init__(self, total_timesteps, print_freq=50000, verbose=1):
+        super().__init__(verbose)
+        self.total_timesteps = total_timesteps
+        self.print_freq = print_freq
+        self.last_print = 0
+
+    def _on_step(self) -> bool:
+        if self.n_calls - self.last_print >= self.print_freq:
+            progress = (self.n_calls / self.total_timesteps) * 100
+            print(f"Progress: {self.n_calls:,}/{self.total_timesteps:,} steps ({progress:.1f}%)")
+            self.last_print = self.n_calls
+        return True
+
+
 # =========================
 # Environment Factory
 # =========================
@@ -159,7 +177,7 @@ def train_robot_waypoint_navigation(
     print(f"Total Timesteps: {total_timesteps:,}")
     print(f"Curriculum Enabled: {enable_curriculum}")
     print(f"Prefer Turning in Path Gen: {prefer_turning}")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
     # Vectorized training env
@@ -221,8 +239,9 @@ def train_robot_waypoint_navigation(
     reward_debug_cb = RewardDebugCallback(log_interval=10_000)
     stuck_cb = StuckMonitorCallback()
     curriculum_cb = CurriculumCallback()
+    progress_cb = ProgressCallback(total_timesteps, print_freq=50_000)
 
-    callbacks = [checkpoint_callback, eval_callback, reward_debug_cb, stuck_cb, curriculum_cb]
+    callbacks = [checkpoint_callback, eval_callback, reward_debug_cb, stuck_cb, curriculum_cb, progress_cb]
 
     # PPO Model
     policy_kwargs = dict(
@@ -272,11 +291,14 @@ def train_robot_waypoint_navigation(
         )
 
     print("Starting training...")
+    print(f"Will print progress every {50_000:,} steps")
+    print("-" * 50)
     model.learn(
         total_timesteps=total_timesteps,
         callback=callbacks,
-        progress_bar=True
+        progress_bar=True  # Enable progress bar
     )
+    print("-" * 50)
     print("Training finished.")
 
     # Save final model + VecNormalize stats

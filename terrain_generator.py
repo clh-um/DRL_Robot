@@ -39,7 +39,8 @@ def create_pybullet_terrain(
     heightfield,
     mesh_scale=(1.0, 1.0, 10.0),
     base_position=(0, 0, 0),
-    texture_path=None
+    texture_path=None,
+    verbose=False  # Add verbose parameter to control printing
 ):
     rows, cols = heightfield.shape
     heightfield_flat = heightfield.reshape(-1)
@@ -68,11 +69,14 @@ def create_pybullet_terrain(
             if os.path.exists(texture_path):
                 texture_id = p.loadTexture(texture_path)
                 p.changeVisualShape(terrain, -1, textureUniqueId=texture_id)
-                print(f"Successfully loaded texture: {texture_path}")
+                if verbose:
+                    print(f"Successfully loaded texture: {texture_path}")
             else:
-                print(f"Warning: Texture file not found: {texture_path}")
+                if verbose:
+                    print(f"Warning: Texture file not found: {texture_path}")
         except Exception as e:
-            print(f"Warning: Failed to load texture {texture_path}: {e}")
+            if verbose:
+                print(f"Warning: Failed to load texture {texture_path}: {e}")
             print("Continuing without texture...")
 
     return terrain
