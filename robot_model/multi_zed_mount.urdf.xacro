@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- 
+    This file manually defines the base links and joints for all four cameras.
+    This version uses the official ZED X 3D models (meshes) and materials for a realistic look in RViz.
+  -->
+
+  <!-- The main mount point for all cameras. This attaches to the robot's main body. -->
+  <link name="multi_camera_mount_link" />
+
+  <!-- Attach the camera mount to the robot's default_mount frame -->
+  <joint name="multi_camera_mount_joint" type="fixed">
+    <parent link="default_mount" />
+    <child link="multi_camera_mount_link" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+
+  <!-- Include the file that defines the ZED camera materials -->
+  <xacro:include filename="$(find zed_wrapper)/urdf/include/materials.urdf.xacro" />
+
+  <!-- 
+    Manually define the link and joint for each camera.
+    The visual tag now points to the ZED X .stl file for a realistic model.
+    
+    IMPORTANT: Update the xyz and rpy values below to match the physical location of your cameras.
+  -->
+
+
+
+
+  <!-- Front Camera -->
+  <link name="front_zed_camera_link">
+    <visual>
+      <geometry>
+        <!-- Use the official 3D model for the ZED X -->
+        <mesh filename="file://$(find zed_msgs)/meshes/zedx.stl"/>
+      </geometry>
+      <!-- Use the official material definition for the ZED X -->
+      <material name="zedx_mat" />
+    </visual>
+  </link>
+  <joint name="front_zed_camera_joint" type="fixed">
+    <parent link="multi_camera_mount_link" />
+    <child link="front_zed_camera_link" />
+    <origin xyz="0.07 0.0 0.45" rpy="0.0 0.349 0.0" />
+  </joint>
+
+
+
+
+
+  <!-- Right Camera -->
+  <link name="right_zed_camera_link">
+    <visual>
+      <geometry>
+        <mesh filename="file://$(find zed_msgs)/meshes/zedx.stl"/>
+      </geometry>
+      <material name="zedx_mat" />
+    </visual>
+  </link>
+  <joint name="right_zed_camera_joint" type="fixed">
+    <parent link="multi_camera_mount_link" />
+    <child link="right_zed_camera_link" />
+    <origin xyz="0.0 -0.35 0.45" rpy="0.0 0.576 -1.57" />
+  </joint>
+
+
+
+
+
+  <!-- Back Camera -->
+  <link name="back_zed_camera_link">
+    <visual>
+      <geometry>
+        <mesh filename="file://$(find zed_msgs)/meshes/zedx.stl"/>
+      </geometry>
+      <material name="zedx_mat" />
+    </visual>
+  </link>
+  <joint name="back_zed_camera_joint" type="fixed">
+    <parent link="multi_camera_mount_link" />
+    <child link="back_zed_camera_link" />
+    <origin xyz="-0.07 0.0 0.43" rpy="0.0 0.314 3.14" />
+  </joint>
+
+
+
+
+  <!-- Left Camera -->
+  <link name="left_zed_camera_link">
+    <visual>
+      <geometry>
+        <mesh filename="file://$(find zed_msgs)/meshes/zedx.stl"/>
+      </geometry>
+      <material name="zedx_mat" />
+    </visual>
+  </link>
+  <joint name="left_zed_camera_joint" type="fixed">
+    <parent link="multi_camera_mount_link" />
+    <child link="left_zed_camera_link" />
+    <origin xyz="0.0 0.35 0.45" rpy="0.0 0.576 1.57" />
+  </joint>
+
+</robot>

@@ -1,0 +1,27 @@
+<?xml version="1.0" ?>
+<robot name="terrain_estate">
+
+  <link name="terrain_link">
+    <inertial>
+      <mass value="0"/> <!-- static object -->
+      <inertia ixx="0.0" ixy="0" ixz="0" iyy="0.0" iyz="0" izz="0.0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </inertial>
+
+    <collision name="collision">
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <mesh filename="terrain5.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+
+    <visual name="visual">
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <mesh filename="terrain5.obj" scale="1 1 1"/>
+      </geometry>
+      <!-- Optional: use <material> if you want to override color -->
+    </visual>
+  </link>
+
+</robot>
