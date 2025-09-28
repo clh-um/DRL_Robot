@@ -205,25 +205,51 @@ class RobotWaypointEnv(gym.Env):
 
         # Terrain
         texture_path = os.path.join(script_path, "terrain", "6ha.png")
-        # Only print texture info once per environment instance
-        if not hasattr(self, '_texture_info_printed'):
-            print(f"Loading texture from: {texture_path}")
-            print(f"Texture exists: {os.path.exists(texture_path)}")
-            self._texture_info_printed = True
-            verbose_texture = True
-        else:
-            verbose_texture = False
-        heightfield = tg.generate_procedural_heightfield(rows=100, cols=100, height_perturbation=0.015)
-        self.terrain_id = tg.create_pybullet_terrain(heightfield,
-                                                     mesh_scale=(3.3, 1.8, 10.0),
-                                                     base_position=(0, 0, 0),
-                                                     texture_path=texture_path,
-                                                     verbose=verbose_texture)
+        label_map_path = os.path.join(script_path, "terrain", "6ha_label.png")  # white=trench, black=cylinder
+
+        mesh_scale = (3.3, 1.8, 10.0)
+        base_position = (0.0, 0.0, 0.0)
+
+        try:
+            terrain_env = tg.setup_terrain_from_image(
+                image_path=texture_path,              # used as texture or fallback only
+                label_map_path=label_map_path,        # << use this for accurate masks
+                label_trench_white_thresh=200,
+                label_cylinder_black_thresh=55,
+                rows=100,
+                cols=100,
+                mesh_scale=mesh_scale,
+                base_position=base_position,
+                trench_depth=0.18,
+                trench_dilate_radius=1,
+                trench_dilate_iters=2,
+                red_min_distance_cells=8,
+                terrain_texture_path=texture_path,
+                seed=self._seed,
+            )
+            self.terrain_id = terrain_env["terrain_id"]
+            self.terrain_hf = terrain_env["heightfield"]
+            self.terrain_mesh_scale = mesh_scale
+            self.terrain_base_pos = base_position
+            self._cylinder_ids = terrain_env.get("cylinder_ids", [])
+            self._mud_pile_ids = terrain_env.get("mud_pile_ids", [])
+            self._mud_patch_ids = terrain_env.get("mud_patch_ids", [])
+        except Exception as e:
+            print(f"[WARN] setup_terrain_from_image failed ({e}); falling back to basic heightfield.")
+            heightfield = tg.generate_procedural_heightfield(rows=100, cols=100, height_perturbation=0.015)
+            self.terrain_id = tg.create_pybullet_terrain(heightfield,
+                                                         mesh_scale=mesh_scale,
+                                                         base_position=base_position,
+                                                         texture_path=texture_path)
+            self.terrain_hf = heightfield
+            self.terrain_mesh_scale = mesh_scale
+            self.terrain_base_pos = base_position
 
         # Random start
         start_x = self._rng.uniform(-2, 2)
         start_y = self._rng.uniform(-2, 2)
-        self.robot_id = p.loadURDF(self.urdf_path, [start_x, start_y, 0.2], physicsClientId=self.client)
+        start_z = self._terrain_height_at(start_x, start_y, default=0.0) + 0.25  # small lift above ground
+        self.robot_id = p.loadURDF(self.urdf_path, [start_x, start_y, start_z], physicsClientId=self.client)
         self._cache_wheel_joints()
 
         # Waypoints
@@ -252,6 +278,34 @@ class RobotWaypointEnv(gym.Env):
         info = {}
         return obs, info
 
+    # ---------------- Terrain sampling ----------------
+    def _terrain_height_at(self, x, y, default=0.0):
+        """
+        Sample the terrain height at world (x, y) using the heightfield from terrain_generator.
+        Assumes the mapping:
+          - row index r corresponds to world y via y = r * sy + base_y
+          - col index c corresponds to world x via x = c * sx + base_x
+        """
+        hf = getattr(self, "terrain_hf", None)
+        mesh_scale = getattr(self, "terrain_mesh_scale", None)
+        base_pos = getattr(self, "terrain_base_pos", (0.0, 0.0, 0.0))
+        if hf is None or mesh_scale is None:
+            return default
+
+        rows, cols = hf.shape
+        sx, sy, sz = mesh_scale
+        bx, by, bz = base_pos
+
+        # Convert world to row/col indices
+        r = int(round((y - by) / max(sy, 1e-8)))
+        c = int(round((x - bx) / max(sx, 1e-8)))
+
+        if r < 0 or r >= rows or c < 0 or c >= cols:
+            return default
+
+        z = float(hf[r, c]) * sz + bz
+        return z
+    
     def step(self, action):
         action = np.clip(action, -1.0, 1.0)
         v_cmd_norm, w_cmd_norm = float(action[0]), float(action[1])
@@ -630,7 +684,9 @@ class RobotWaypointEnv(gym.Env):
 
             nx = cx + dist * math.cos(base_angle)
             ny = cy + dist * math.sin(base_angle)
-            self.waypoints.append(np.array([nx, ny, 0.1]))
+            nz = self._terrain_height_at(nx, ny, default=0.0) + 0.10  # slight offset above ground
+            self.waypoints.append(np.array([nx, ny, nz], dtype=np.float32))
+
             cx, cy = nx, ny
             prev_heading = base_angle
 
@@ -667,19 +723,6 @@ class RobotWaypointEnv(gym.Env):
         d = a - b
         return ((d + math.pi) % (2 * math.pi)) - math.pi
 
-    # ---------------- SB3 Compatibility ----------------
-    def get_wrapper_attr(self, name):
-        """Required for SubprocVecEnv compatibility"""
-        return getattr(self, name)
-    
-    def set_wrapper_attr(self, name, value):
-        """Required for SubprocVecEnv compatibility"""
-        setattr(self, name, value)
-
-    def get_attr(self, name):
-        """Required for SubprocVecEnv compatibility"""
-        return getattr(self, name)
-
 
 # Simple sanity test
 if __name__ == "__main__":
@@ -693,6 +736,7 @@ if __name__ == "__main__":
         else:
             action = np.array([0.8, -0.5 * angle], dtype=np.float32)
         obs, r, term, trunc, info = env.step(action)
+        time.sleep(1./240.)
         if term or trunc:
             obs, _ = env.reset()
     env.close()
